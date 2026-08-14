@@ -760,6 +760,14 @@ body>*:not(#gc):not(.nav):not(.overlay):not(#auth-screen):not(.bbar):not(.vbadge
 .bazone p{font-size:10px;color:var(--cream3);margin:0;font-weight:300}
 .bazone span{border:1px solid var(--gb);color:var(--gold2);padding:4px 12px;border-radius:5px;font-size:7px;font-weight:700;letter-spacing:2px;text-transform:uppercase;font-family:'DM Mono',monospace;pointer-events:none}
 .baburst{position:relative;border-radius:10px;overflow:hidden;border:1px solid rgba(100,80,200,.18);box-shadow:0 0 0 1px rgba(196,151,58,.06),0 14px 44px rgba(0,0,0,.4);animation:imgRise .4s ease both}
+/* Trade Card Prev/Next nav owns the transition for the whole card as one
+   unit — suppress the per-image "rise in" burst animation only while that
+   nav swap is in flight, so freshly-inserted chart/before-after images
+   don't independently fade from 0 opacity a beat after the card itself
+   has already faded in (that double-animation is what read as a blink).
+   Untouched everywhere else — first open, manual uploads, etc. still get
+   the full burst effect. */
+#tradeModalCard.tm-navigating .imgburst,#tradeModalCard.tm-navigating .baburst{animation:none}
 .baburst img{width:100%;max-height:240px;object-fit:contain;display:block;background:#000;image-rendering:auto;cursor:zoom-in;touch-action:manipulation}
 .baburst-ov{position:absolute;top:0;right:0;bottom:0;left:0;background:linear-gradient(to top,rgba(7,8,28,.22) 0%,transparent 40%);pointer-events:none}
 .baburst-rep{position:absolute;bottom:7px;right:7px}
@@ -981,7 +989,51 @@ body>*:not(#gc):not(.nav):not(.overlay):not(#auth-screen):not(.bbar):not(.vbadge
   position:relative;width:100%;max-width:680px;max-height:88vh;border-radius:20px;
   box-shadow:0 0 0 1px rgba(196,151,58,.24),0 30px 90px -18px rgba(0,0,0,.65),0 0 90px rgba(196,151,58,.14),0 0 170px rgba(100,80,200,.11);
   will-change:transform,opacity;backface-visibility:hidden;
+  perspective:1600px;
 }
+/* ── TRADE CARD NAVIGATION — Previous/Next between trade files within
+   the same continuously-open viewer. Purely additive: does not alter
+   the Trade Card design, the open/close FLIP transform above, or any
+   unrelated UI. Hidden by default; revealed only near the extreme
+   screen edges; auto-hides after ~2s idle (shared timer, same
+   philosophy as the existing chart lightbox edge zones). ── */
+.tm-navzone{position:fixed;top:0;bottom:0;width:110px;z-index:900;
+  display:flex;align-items:center;pointer-events:none;
+  opacity:0;perspective:700px;transition:opacity .35s cubic-bezier(.22,1,.36,1)}
+#tradeModalOverlay.open .tm-navzone.show{opacity:1;pointer-events:auto}
+.tm-navzone-l{left:0;justify-content:flex-start;padding-left:16px}
+.tm-navzone-r{right:0;justify-content:flex-end;padding-right:16px}
+.tm-navbtn{position:relative;z-index:1}
+@media(hover:none){
+  #tradeModalOverlay.open .tm-navzone{opacity:1;pointer-events:auto}
+}
+/* ── "LIVE" HOLOGRAPHIC NAV PRESENCE — scoped strictly to .tm-navbtn
+   (the trade-modal nav buttons only), never .lb-navbtn's base rules, so
+   the unrelated chart-lightbox Prev/Next is completely unaffected.
+   Ambient ::after glow layer + a near-imperceptible breathing loop that
+   only runs while a zone is actually shown. Proximity brightness is
+   driven by --tm-glow (0..1), set from JS as the cursor nears the edge,
+   layered underneath the existing :hover/:active lift. ── */
+.tm-navbtn{--tm-glow:0;transform-style:preserve-3d}
+.tm-navbtn::after{content:'';position:absolute;inset:-9px;border-radius:50%;
+  background:radial-gradient(circle,rgba(232,200,112,.4),transparent 72%);
+  opacity:calc(.14 + var(--tm-glow,0) * .4);filter:blur(7px);
+  pointer-events:none;z-index:-1;transition:opacity .4s ease-out}
+.tm-navzone.show .tm-navbtn{animation:tmBreathe 3.6s ease-in-out infinite}
+@keyframes tmBreathe{
+  0%,100%{transform:scale(1) translateZ(0);
+    box-shadow:0 8px 28px -8px rgba(0,0,0,.7),0 0 22px -6px rgba(196,151,58,.35),inset 0 1px 0 rgba(255,255,255,.08)}
+  50%{transform:scale(1.014) translateZ(2px);
+    box-shadow:0 8px 30px -8px rgba(0,0,0,.7),0 0 30px -5px rgba(196,151,58,.5),inset 0 1px 0 rgba(255,255,255,.1)}
+}
+.tm-navbtn:hover{animation-play-state:paused;
+  transform:scale(1.1) translateZ(4px)!important;
+  box-shadow:0 10px 34px -8px rgba(0,0,0,.75),0 0 36px -4px rgba(196,151,58,.62),inset 0 1px 0 rgba(255,255,255,.12)!important}
+.tm-navbtn:active{animation-play-state:paused;
+  transform:scale(.93) translateZ(-2px)!important;
+  box-shadow:0 4px 14px -6px rgba(0,0,0,.7),0 0 14px -4px rgba(196,151,58,.3),inset 0 1px 0 rgba(255,255,255,.06)!important;
+  transition:transform .09s ease-out,box-shadow .09s ease-out!important}
+@media(prefers-reduced-motion:reduce){.tm-navzone.show .tm-navbtn{animation:none}}
 .trade-modal-scroll{
   max-height:88vh;overflow-y:auto;border-radius:20px;-webkit-overflow-scrolling:touch;
 }
@@ -1580,6 +1632,12 @@ body>*:not(#gc):not(.nav):not(.overlay):not(#auth-screen):not(.bbar):not(.vbadge
     <button class="trade-modal-x" onclick="closeTrade(_modalType)" aria-label="Close">×</button>
     <div class="trade-modal-scroll" id="tradeModalCard"></div>
   </div>
+  <div id="tmNavL" class="tm-navzone tm-navzone-l">
+    <button class="lb-navbtn tm-navbtn" id="tmPrevBtn" onclick="event.stopPropagation();navigateTrade(-1)" title="Previous trade" aria-label="Previous trade"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+  </div>
+  <div id="tmNavR" class="tm-navzone tm-navzone-r">
+    <button class="lb-navbtn tm-navbtn" id="tmNextBtn" onclick="event.stopPropagation();navigateTrade(1)" title="Next trade" aria-label="Next trade"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
+  </div>
 </div>
 
 <div class="vbadge" id="vbadge">👁 View Only</div>
@@ -1729,6 +1787,10 @@ document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){
     closeProfileMenu();
     if(_modalType!=null)closeTrade(_modalType);
+  }
+  if(_modalType!=null && document.getElementById('tradeModalOverlay')?.classList.contains('open')){
+    if(e.key==='ArrowRight')navigateTrade(1);
+    else if(e.key==='ArrowLeft')navigateTrade(-1);
   }
 });
 
@@ -2197,13 +2259,23 @@ function renderSearch(){
   const q=(document.getElementById('srch-input').value||'').trim().toLowerCase();
   let results=[];
   if(_searchFilter==='all'||_searchFilter==='trades'||_searchFilter==='setups'){
+    // Match first, then sort by date added (newest first) and cap the
+    // visible Trade File results to 5 — matched trades beyond that remain
+    // fully intact in Supabase/setups[], just not shown in this list.
+    let tradeMatches=[];
     ['swing','intraday'].forEach(type=>{
       (setups[type]||[]).forEach(s=>{
         const hay=[s.pair,s.bias,s.date,type,s.breakdown].join(' ').toLowerCase();
-        if(!q||hay.includes(q)){
-          results.push({tag:type==='swing'?'Swing':'Intraday',title:s.pair||'Instrument',sub:(s.bias||'')+' · '+(s.date||''),outcome:outcomeClass(s.outcome),action:()=>{showPage(type);openFolder(type,s.pair);openTrade(type,s.id);}});
-        }
+        if(!q||hay.includes(q))tradeMatches.push({type,s});
       });
+    });
+    tradeMatches.sort((a,b)=>{
+      const da=a.s.date?new Date(a.s.date).getTime():-Infinity;
+      const db=b.s.date?new Date(b.s.date).getTime():-Infinity;
+      return db-da;
+    });
+    tradeMatches.slice(0,5).forEach(({type,s})=>{
+      results.push({tag:type==='swing'?'Swing':'Intraday',title:s.pair||'Instrument',sub:(s.bias||'')+' · '+(s.date||''),outcome:outcomeClass(s.outcome),action:()=>{showPage(type);openFolder(type,s.pair);openTrade(type,s.id);}});
     });
   }
   if(_searchFilter==='all'||_searchFilter==='certs'){
@@ -2299,6 +2371,16 @@ function folderIcon(color){
 let activeFolder={swing:null,intraday:null},activeTrade={swing:null,intraday:null};
 function openFolder(type,pair){activeFolder[type]=pair;activeTrade[type]=null;renderList(type);}
 function closeFolder(type){activeFolder[type]=null;activeTrade[type]=null;renderList(type);}
+// Trades within one folder (same type+pair), newest first — the single
+// source of truth for folder order, used both to render the folder's
+// trade list and to drive Previous/Next trade-card navigation.
+function folderMatches(type,pair){
+  return (setups[type]||[]).filter(s=>s.pair===pair).slice().sort((a,b)=>{
+    const da=a.date?new Date(a.date).getTime():-Infinity;
+    const db=b.date?new Date(b.date).getTime():-Infinity;
+    return db-da;
+  });
+}
 // ═══ TRADE FILE MODAL ═══════════════════════════════════════════
 let _modalType=null,_modalId=null;
 function openTrade(type,id,originEl){
@@ -2345,7 +2427,9 @@ function tradeFlipRect(wrap,originEl){
 function showTradeModal(type,s,originEl){
   const overlay=document.getElementById('tradeModalOverlay'),wrap=document.getElementById('tradeModalWrap'),card=document.getElementById('tradeModalCard');
   _modalType=type;_modalId=s.id;
+  card.style.transition='none';card.style.transform='none';card.style.opacity='';
   card.innerHTML=buildCard(s);
+  tmSyncNavContext();tmUpdateNavButtons();tmPreloadNeighbors();tmShowInitial();
   overlay.style.display='flex';
   lockBodyScroll();
   void overlay.offsetWidth;
@@ -2390,7 +2474,153 @@ function hideTradeModal(){
     card.innerHTML='';
     unlockBodyScroll();
     _modalType=null;_modalId=null;
+    tmNavList=[];tmNavIdx=-1;tmAnimating=false;
+    tmHideZones();clearTimeout(tmHideT);
   },TF_MS);
+}
+// ═══ TRADE CARD NAVIGATION (Previous / Next, continuous viewer) ═══════
+// Reuses the existing openTrade/showTradeModal viewer and folderMatches
+// order — no second Trade Card system, no reopening, no folder return.
+let tmNavList=[],tmNavIdx=-1,tmAnimating=false,tmHideT=null;
+const TM_EDGE_PX=110,TNAV_OUT_MS=240,TNAV_IN_MS=440,TNAV_EASE='cubic-bezier(.16,1,.3,1)';
+function tmSyncNavContext(){
+  if(_modalType==null||_modalId==null){tmNavList=[];tmNavIdx=-1;return;}
+  const s=(setups[_modalType]||[]).find(x=>x.id===_modalId);
+  if(!s){tmNavList=[];tmNavIdx=-1;return;}
+  tmNavList=folderMatches(_modalType,s.pair);
+  tmNavIdx=tmNavList.findIndex(x=>x.id===_modalId);
+}
+function tmUpdateNavButtons(){
+  const navL=document.getElementById('tmNavL'),navR=document.getElementById('tmNavR');
+  const prevBtn=document.getElementById('tmPrevBtn'),nextBtn=document.getElementById('tmNextBtn');
+  if(!navL||!navR||!prevBtn||!nextBtn)return;
+  const hasPrev=tmNavIdx>0,hasNext=tmNavIdx>-1&&tmNavIdx<tmNavList.length-1;
+  navL.style.display=hasPrev?'flex':'none';
+  navR.style.display=hasNext?'flex':'none';
+  prevBtn.disabled=!hasPrev;
+  nextBtn.disabled=!hasNext;
+  if(!hasPrev)navL.classList.remove('show');
+  if(!hasNext)navR.classList.remove('show');
+}
+// Auto-reveal both nav zones for ~2s the moment a Trade Card opens, so the
+// user immediately understands it's navigable — independent of any edge
+// hover. Reuses the exact same .show class + hide timer as the hover path.
+function tmShowInitial(){
+  const navL=document.getElementById('tmNavL'),navR=document.getElementById('tmNavR');
+  if(!navL||!navR)return;
+  clearTimeout(tmHideT);
+  if(navL.style.display!=='none')navL.classList.add('show');
+  if(navR.style.display!=='none')navR.classList.add('show');
+  tmKeepNavAlive();
+}
+// Warm the browser cache for the neighboring trade files — charts,
+// before/after images — so stepping Prev/Next never shows a blank card.
+function tmPreloadTrade(s){
+  if(!s)return;
+  (TF[s.type]||[]).forEach(tf=>{const d=s.tfs&&s.tfs[tf.key];if(d&&d.img){const im=new Image();im.src=d.img;}});
+  if(s.baImg&&s.baImg.before){const im=new Image();im.src=s.baImg.before;}
+  if(s.baImg&&s.baImg.after){const im=new Image();im.src=s.baImg.after;}
+}
+function tmPreloadNeighbors(){
+  if(tmNavIdx>0)tmPreloadTrade(tmNavList[tmNavIdx-1]);
+  if(tmNavIdx>-1&&tmNavIdx<tmNavList.length-1)tmPreloadTrade(tmNavList[tmNavIdx+1]);
+}
+function tmHideZones(){
+  document.getElementById('tmNavL')?.classList.remove('show');
+  document.getElementById('tmNavR')?.classList.remove('show');
+  // reset the ambient proximity glow so it doesn't re-appear pre-lit next reveal
+  document.getElementById('tmPrevBtn')?.style.setProperty('--tm-glow','0');
+  document.getElementById('tmNextBtn')?.style.setProperty('--tm-glow','0');
+}
+function tmKeepNavAlive(){
+  clearTimeout(tmHideT);
+  tmHideT=setTimeout(tmHideZones,2000);
+}
+function tmOverlayMouseMove(e){
+  if(_modalId==null)return;
+  const navL=document.getElementById('tmNavL'),navR=document.getElementById('tmNavR');
+  if(!navL||!navR)return;
+  const lBtn=document.getElementById('tmPrevBtn'),rBtn=document.getElementById('tmNextBtn');
+  // ANY meaningful movement anywhere in the viewer reveals both eligible
+  // zones (not just edge proximity) and restarts the single shared 2s
+  // hide timer — tmKeepNavAlive() already clears+resets it, so there is
+  // never more than one timer running and no flicker from re-adding an
+  // already-present 'show' class.
+  if(navL.style.display!=='none')navL.classList.add('show');
+  if(navR.style.display!=='none')navR.classList.add('show');
+  tmKeepNavAlive();
+  // Ambient glow proximity boost is still edge-specific and layered on
+  // top of the (now movement-driven) visibility — purely a brightness
+  // detail, doesn't gate whether the nav is shown.
+  if(e.clientX<=TM_EDGE_PX){
+    const p=Math.max(0,Math.min(1,1-(e.clientX/TM_EDGE_PX)));
+    lBtn?.style.setProperty('--tm-glow',p.toFixed(2));
+  } else {
+    lBtn?.style.setProperty('--tm-glow','0');
+  }
+  if(e.clientX>=window.innerWidth-TM_EDGE_PX){
+    const p=Math.max(0,Math.min(1,1-((window.innerWidth-e.clientX)/TM_EDGE_PX)));
+    rBtn?.style.setProperty('--tm-glow',p.toFixed(2));
+  } else {
+    rBtn?.style.setProperty('--tm-glow','0');
+  }
+}
+document.getElementById('tradeModalOverlay')?.addEventListener('mousemove',tmOverlayMouseMove);
+['tmNavL','tmNavR'].forEach(id=>{
+  const zone=document.getElementById(id);
+  if(!zone)return;
+  zone.addEventListener('mouseenter',()=>{clearTimeout(tmHideT);zone.classList.add('show');});
+  zone.addEventListener('mouseleave',tmKeepNavAlive);
+  // Whole edge strip is clickable, not just the visible round button — the
+  // button keeps its own onclick+stopPropagation, so this only fires for
+  // clicks elsewhere in the invisible zone.
+  zone.addEventListener('click',()=>{
+    if(zone.style.display==='none')return;
+    navigateTrade(id==='tmNavL'?-1:1);
+  });
+});
+// Premium 3D directional swap of the Trade Card CONTENT only — the
+// outer viewer (#tradeModalOverlay/#tradeModalWrap) never closes,
+// reopens, or re-renders; only #tradeModalCard's inner content moves.
+function navigateTrade(dir){
+  if(tmAnimating||_modalType==null)return;
+  if(tmNavIdx<0||tmNavList.length<2)return;
+  const newIdx=tmNavIdx+dir;
+  if(newIdx<0||newIdx>=tmNavList.length)return;
+  const target=tmNavList[newIdx];
+  const type=_modalType;
+  const cardEl=document.getElementById('tradeModalCard');
+  if(!cardEl||!target)return;
+  tmKeepNavAlive();
+  tmAnimating=true;
+  cardEl.classList.add('tm-navigating'); // suppress imgRise burst on the rebuilt content — see CSS
+  const outX=dir>0?-38:38,outRot=dir>0?-7:7;
+  cardEl.style.willChange='transform,opacity';
+  cardEl.style.transition='transform '+TNAV_OUT_MS+'ms '+TNAV_EASE+',opacity '+TNAV_OUT_MS+'ms ease-out';
+  cardEl.style.transform='translate3d('+outX+'px,0,-30px) rotateY('+outRot+'deg) scale3d(.965,.965,1)';
+  cardEl.style.opacity='0';
+  setTimeout(()=>{
+    activeTrade[type]=target.id;
+    _modalId=target.id;
+    cardEl.innerHTML=buildCard(target);
+    applyModalGlow(target.outcome);
+    tmSyncNavContext();
+    tmUpdateNavButtons();
+    tmPreloadNeighbors();
+    const inX=dir>0?38:-38,inRot=dir>0?7:-7;
+    cardEl.style.transition='none';
+    cardEl.style.transform='translate3d('+inX+'px,0,-30px) rotateY('+inRot+'deg) scale3d(.965,.965,1)';
+    cardEl.style.opacity='0';
+    void cardEl.offsetWidth;
+    requestAnimationFrame(()=>{
+      requestAnimationFrame(()=>{
+        cardEl.style.transition='transform '+TNAV_IN_MS+'ms '+TNAV_EASE+',opacity '+TNAV_IN_MS+'ms ease-out';
+        cardEl.style.transform='translate3d(0,0,0) rotateY(0deg) scale3d(1,1,1)';
+        cardEl.style.opacity='1';
+        setTimeout(()=>{tmAnimating=false;cardEl.style.willChange='';cardEl.classList.remove('tm-navigating');},TNAV_IN_MS);
+      });
+    });
+  },TNAV_OUT_MS);
 }
 function outcomeClass(val){return val==='profit'?'profit':val==='loss'?'loss':val==='breakeven'?'breakeven':'pending';}
 function outcomeLabel(val){return val==='profit'?'✓ Profit':val==='loss'?'✕ Loss':val==='breakeven'?'● Breakeven':'— Pending';}
@@ -2440,14 +2670,15 @@ function renderList(type){
   if(activeFolder[type]){
     const pair=activeFolder[type];
     const col=pairColor(pair);
-    const matches=list.filter(s=>s.pair===pair).slice().sort((a,b)=>{
-      const da=a.date?new Date(a.date).getTime():-Infinity;
-      const db=b.date?new Date(b.date).getTime():-Infinity;
-      return db-da;
-    });
+    // folderMatches() is already newest-first by date added — this is also
+    // the single source of truth Prev/Next navigation walks, so all older
+    // trades remain fully reachable there and in Supabase; only the
+    // visible list rendered here is capped to the newest 5.
+    const matches=folderMatches(type,pair);
+    const visible=matches.slice(0,5);
     el.innerHTML='<button class="folder-back" onclick="closeFolder(\''+type+'\')">‹ All '+(type==='swing'?'Swing':'Intraday')+' Folders</button>'+
       '<div class="folder-detail-h" style="color:'+col+'">'+pair+'</div>'+
-      '<div class="trow-list">'+matches.map(s=>buildTradeRow(s)).join('')+'</div>';
+      '<div class="trow-list">'+visible.map(s=>buildTradeRow(s)).join('')+'</div>';
   } else {
     const groups={};
     list.forEach(s=>{(groups[s.pair]=groups[s.pair]||[]).push(s)});
@@ -2503,7 +2734,7 @@ function buildTF(s,tf){
   const d=s.tfs[tf.key]||{img:null,f:{}},fi='fi-'+s.id+'-'+tf.key;
   const flds=FLDS[tf.key]||['Market Structure','Analysis & Confluence'];
   const imgH=d.img
-    ?'<div class="imgburst"><img src="'+d.img+'" alt="'+tf.pill+'" loading="lazy" decoding="async"/><div class="imgburst-ov"></div>'+(viewMode?'':'<label class="rep-btn imgburst-rep" title="Replace" for="'+fi+'"><svg viewBox="0 0 14 14" fill="none"><path d="M2.5 7a4.5 4.5 0 1 0 .9-2.7" stroke="#E8C870" stroke-width="1.3" stroke-linecap="round"/><polyline points="1,2.5 3.4,4.3 3.4,2 1,3.8" fill="#E8C870"/></svg><input type="file" id="'+fi+'" accept="image/*" style="display:none" onchange="hImg(event,'+s.id+',\''+tf.key+'\')"/></label>')+'</div>'
+    ?'<div class="imgburst"><img src="'+d.img+'" alt="'+tf.pill+'" loading="eager" decoding="async"/><div class="imgburst-ov"></div>'+(viewMode?'':'<label class="rep-btn imgburst-rep" title="Replace" for="'+fi+'"><svg viewBox="0 0 14 14" fill="none"><path d="M2.5 7a4.5 4.5 0 1 0 .9-2.7" stroke="#E8C870" stroke-width="1.3" stroke-linecap="round"/><polyline points="1,2.5 3.4,4.3 3.4,2 1,3.8" fill="#E8C870"/></svg><input type="file" id="'+fi+'" accept="image/*" style="display:none" onchange="hImg(event,'+s.id+',\''+tf.key+'\')"/></label>')+'</div>'
     :viewMode?'<div style="padding:16px;text-align:center;color:rgba(237,232,223,.18);font-size:10px">No chart uploaded</div>':'<label class="imgzone" for="'+fi+'"><svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="rgba(100,80,200,.3)" stroke-width="1" style="position:relative;z-index:1"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="3,17 8,12 13,14 18,8"/></svg><p>Upload '+tf.pill+' chart</p><div class="imgcta">Choose Image</div><input type="file" id="'+fi+'" accept="image/*" style="display:none" onchange="hImg(event,'+s.id+',\''+tf.key+'\')"/></label>';
   return '<div class="tfsec"><div class="tfacc" onclick="toggleTF('+s.id+',\''+tf.key+'\')"><div class="tfal"><span class="tfpill">'+tf.pill+'</span><span class="tfdesc">'+tf.desc+'</span></div><span class="tfch" id="ch-'+s.id+'-'+tf.key+'">▼</span></div><div class="tfbody" id="tfb-'+s.id+'-'+tf.key+'"><div class="imgslot">'+imgH+'</div>'+flds.map((lbl,i)=>'<div class="fw"><div class="fl">'+lbl+'</div><textarea class="ft" placeholder="'+ph(lbl)+'" onchange="sfld('+s.id+',\''+tf.key+'\',\'f'+i+'\',this.value)"'+(viewMode?' readonly':'')+'>'+(d.f['f'+i]||'')+'</textarea></div>').join('')+'</div></div>';
 }
@@ -2514,7 +2745,7 @@ function buildFooter(s){
   const outcomeHTML='<div class="outcome-bar '+obClass+'" id="obar-'+s.id+'"><span class="ob-l">Trade Outcome</span>'+(viewMode
     ?'<span id="orow-'+s.id+'" class="out-badge out-'+outcomeClass(s.outcome)+'">'+outcomeLabel(s.outcome)+'</span>'
     :'<select class="ob-select" onchange="setOutcome('+s.id+',\''+s.type+'\',this.value)"><option value="pending" '+((!s.outcome||s.outcome==='pending')?'selected':'')+'>— Pending</option><option value="profit" '+(s.outcome==='profit'?'selected':'')+'>✓ Profit</option><option value="loss" '+(s.outcome==='loss'?'selected':'')+'>✕ Loss</option><option value="breakeven" '+(s.outcome==='breakeven'?'selected':'')+'>● Breakeven</option></select>')+'</div>';
-  const recHTML='<div class="rec"><div class="rech"><span>Trade Record · Before & After</span><span style="color:rgba(196,151,58,.28);font-size:7px">Entry · Exit Documentation</span></div><div class="recb"><div class="bagrid"><div class="baslot" id="bas-'+s.id+'-before"><div class="balbl">Before Entry</div>'+(bef?'<div class="baburst"><img src="'+bef+'" alt="Before" loading="lazy" decoding="async"/><div class="baburst-ov"></div>'+(viewMode?'':'<label class="rep-btn baburst-rep" title="Replace" for="bab-'+s.id+'"><svg viewBox="0 0 14 14" fill="none"><path d="M2.5 7a4.5 4.5 0 1 0 .9-2.7" stroke="#E8C870" stroke-width="1.3" stroke-linecap="round"/><polyline points="1,2.5 3.4,4.3 3.4,2 1,3.8" fill="#E8C870"/></svg><input type="file" id="bab-'+s.id+'" accept="image/*" style="display:none" onchange="hBA(event,'+s.id+',\'before\')"/></label>')+'</div>':viewMode?'<div style="padding:16px;text-align:center;color:rgba(237,232,223,.18);font-size:10px">No image</div>':'<label class="bazone" for="bab-'+s.id+'"><p>Chart at entry</p><span>Upload</span><input type="file" id="bab-'+s.id+'" accept="image/*" style="display:none" onchange="hBA(event,'+s.id+',\'before\')"/></label>')+'</div><div class="baslot" id="bas-'+s.id+'-after"><div class="balbl">After Take Profit</div>'+(aft?'<div class="baburst"><img src="'+aft+'" alt="After" loading="lazy" decoding="async"/><div class="baburst-ov"></div>'+(viewMode?'':'<label class="rep-btn baburst-rep" title="Replace" for="baa-'+s.id+'"><svg viewBox="0 0 14 14" fill="none"><path d="M2.5 7a4.5 4.5 0 1 0 .9-2.7" stroke="#E8C870" stroke-width="1.3" stroke-linecap="round"/><polyline points="1,2.5 3.4,4.3 3.4,2 1,3.8" fill="#E8C870"/></svg><input type="file" id="baa-'+s.id+'" accept="image/*" style="display:none" onchange="hBA(event,'+s.id+',\'after\')"/></label>')+'</div>':viewMode?'<div style="padding:16px;text-align:center;color:rgba(237,232,223,.18);font-size:10px">No image</div>':'<label class="bazone" for="baa-'+s.id+'"><p>Chart at TP hit</p><span>Upload</span><input type="file" id="baa-'+s.id+'" accept="image/*" style="display:none" onchange="hBA(event,'+s.id+',\'after\')"/></label>')+'</div></div></div>';
+  const recHTML='<div class="rec"><div class="rech"><span>Trade Record · Before & After</span><span style="color:rgba(196,151,58,.28);font-size:7px">Entry · Exit Documentation</span></div><div class="recb"><div class="bagrid"><div class="baslot" id="bas-'+s.id+'-before"><div class="balbl">Before Entry</div>'+(bef?'<div class="baburst"><img src="'+bef+'" alt="Before" loading="eager" decoding="async"/><div class="baburst-ov"></div>'+(viewMode?'':'<label class="rep-btn baburst-rep" title="Replace" for="bab-'+s.id+'"><svg viewBox="0 0 14 14" fill="none"><path d="M2.5 7a4.5 4.5 0 1 0 .9-2.7" stroke="#E8C870" stroke-width="1.3" stroke-linecap="round"/><polyline points="1,2.5 3.4,4.3 3.4,2 1,3.8" fill="#E8C870"/></svg><input type="file" id="bab-'+s.id+'" accept="image/*" style="display:none" onchange="hBA(event,'+s.id+',\'before\')"/></label>')+'</div>':viewMode?'<div style="padding:16px;text-align:center;color:rgba(237,232,223,.18);font-size:10px">No image</div>':'<label class="bazone" for="bab-'+s.id+'"><p>Chart at entry</p><span>Upload</span><input type="file" id="bab-'+s.id+'" accept="image/*" style="display:none" onchange="hBA(event,'+s.id+',\'before\')"/></label>')+'</div><div class="baslot" id="bas-'+s.id+'-after"><div class="balbl">After Take Profit</div>'+(aft?'<div class="baburst"><img src="'+aft+'" alt="After" loading="eager" decoding="async"/><div class="baburst-ov"></div>'+(viewMode?'':'<label class="rep-btn baburst-rep" title="Replace" for="baa-'+s.id+'"><svg viewBox="0 0 14 14" fill="none"><path d="M2.5 7a4.5 4.5 0 1 0 .9-2.7" stroke="#E8C870" stroke-width="1.3" stroke-linecap="round"/><polyline points="1,2.5 3.4,4.3 3.4,2 1,3.8" fill="#E8C870"/></svg><input type="file" id="baa-'+s.id+'" accept="image/*" style="display:none" onchange="hBA(event,'+s.id+',\'after\')"/></label>')+'</div>':viewMode?'<div style="padding:16px;text-align:center;color:rgba(237,232,223,.18);font-size:10px">No image</div>':'<label class="bazone" for="baa-'+s.id+'"><p>Chart at TP hit</p><span>Upload</span><input type="file" id="baa-'+s.id+'" accept="image/*" style="display:none" onchange="hBA(event,'+s.id+',\'after\')"/></label>')+'</div></div></div>';
   const breakdownHTML='<div><div class="bdlbl">Full Top-Down Breakdown</div><textarea class="ft" style="min-height:100px" placeholder="Complete top-down breakdown — macro narrative, daily confirmation, 4H setup, entry rationale, how the trade played out…" onchange="ssf('+s.id+',\'breakdown\',this.value)"'+(viewMode?' readonly':'')+'>'+(s.breakdown||'')+'</textarea></div>';
   return '<div class="sfoot"><div class="sfh">Trade Setup</div><div class="svals"><div class="sv sv-gold"><span class="svl">Entry Zone</span><input class="svi" placeholder="68.50–69.00" value="'+(s.entry||'')+'" onchange="ssf('+s.id+',\'entry\',this.value)"'+(viewMode?' readonly':'')+'></div><div class="sv sv-red"><span class="svl">Stop Loss</span><input class="svi" placeholder="71.50" value="'+(s.sl||'')+'" onchange="ssf('+s.id+',\'sl\',this.value)"'+(viewMode?' readonly':'')+'></div><div class="sv sv-green"><span class="svl">Take Profit</span><input class="svi" placeholder="65.50" value="'+(s.tp||'')+'" onchange="ssf('+s.id+',\'tp\',this.value)"'+(viewMode?' readonly':'')+'></div><div class="sv sv-gold"><span class="svl">Risk / Reward</span><input class="svi" placeholder="3.2:1" value="'+(s.rr||'')+'" onchange="ssf('+s.id+',\'rr\',this.value)"'+(viewMode?' readonly':'')+'></div></div>'+biasHTML+recHTML+outcomeHTML+breakdownHTML+'</div>';
 }
