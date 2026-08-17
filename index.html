@@ -670,9 +670,11 @@ body>*:not(#gc):not(.nav):not(.overlay):not(#auth-screen):not(.bbar):not(.vbadge
 .tfal{display:flex;align-items:center;gap:12px}
 .tfpill{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:2.5px;color:#C0A0FF;background:rgba(100,80,200,.09);border:1px solid rgba(100,80,200,.2);padding:3px 11px;border-radius:20px;text-transform:uppercase}
 .tfdesc{font-size:10px;color:var(--cream3);font-weight:300;font-style:italic}
-.tfch{font-size:8px;color:var(--cream3);transition:transform .3s;font-family:'DM Mono',monospace}
+.tfch{font-size:11px;color:var(--cream3);transition:transform .3s cubic-bezier(.22,1,.36,1),color .2s;font-family:'DM Mono',monospace;flex-shrink:0;line-height:1}
+.tfacc:hover .tfch{color:var(--gold3)}
 .tfbody{display:none;padding:0 28px 26px}
 .tfbody.open{display:block;animation:fadeUp .3s ease both}
+.bdsec{margin:0 -28px}
 
 /* ── IMAGE ZONES ── */
 .imgslot{position:relative;margin-bottom:20px}
@@ -708,7 +710,12 @@ body>*:not(#gc):not(.nav):not(.overlay):not(#auth-screen):not(.bbar):not(.vbadge
 
 /* ── FIELDS ── */
 .fw{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.fwh{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;gap:10px}
 .fl{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:3px;color:rgba(196,151,58,.48);text-transform:uppercase}
+.fch{font-size:9px;color:var(--cream3);transition:transform .3s cubic-bezier(.22,1,.36,1),color .2s;font-family:'DM Mono',monospace;flex-shrink:0;line-height:1}
+.fwh:hover .fch{color:var(--gold3)}
+.fwb{display:none;margin-top:6px}
+.fwb.open{display:block;animation:fadeUp .25s ease both}
 .ft,.fi,.fs{background:rgba(0,0,0,.28);border:1px solid rgba(100,80,200,.2);border-radius:8px;color:var(--cream);font-family:'Outfit',sans-serif;font-size:12px;font-weight:300;padding:10px 13px;outline:none;transition:border-color .2s,box-shadow .2s;width:100%}
 .ft:focus,.fi:focus,.fs:focus{border-color:rgba(196,151,58,.3);box-shadow:0 0 0 3px rgba(196,151,58,.05)}
 .ft{resize:vertical;min-height:92px;line-height:1.8;font-size:13px;
@@ -771,7 +778,7 @@ body>*:not(#gc):not(.nav):not(.overlay):not(#auth-screen):not(.bbar):not(.vbadge
 .baburst img{width:100%;max-height:240px;object-fit:contain;display:block;background:#000;image-rendering:auto;cursor:zoom-in;touch-action:manipulation}
 .baburst-ov{position:absolute;top:0;right:0;bottom:0;left:0;background:linear-gradient(to top,rgba(7,8,28,.22) 0%,transparent 40%);pointer-events:none}
 .baburst-rep{position:absolute;bottom:7px;right:7px}
-.bdlbl{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:3px;color:rgba(196,151,58,.45);text-transform:uppercase;margin-bottom:6px}
+.bdlbl{font-family:'DM Mono',monospace;font-size:9px;font-weight:500;letter-spacing:3px;color:var(--gold3);text-transform:uppercase;margin-bottom:6px}
 
 /* ── CERTS ── */
 .certtri{display:flex;flex-direction:column;align-items:center;gap:22px;padding:8px 0}
@@ -2427,7 +2434,7 @@ function tradeFlipRect(wrap,originEl){
 function showTradeModal(type,s,originEl){
   const overlay=document.getElementById('tradeModalOverlay'),wrap=document.getElementById('tradeModalWrap'),card=document.getElementById('tradeModalCard');
   _modalType=type;_modalId=s.id;
-  card.style.transition='none';card.style.transform='none';card.style.opacity='';
+  card.style.transition='none';card.style.transform='none';card.style.opacity='';card.style.pointerEvents='';
   card.innerHTML=buildCard(s);
   tmSyncNavContext();tmUpdateNavButtons();tmPreloadNeighbors();tmShowInitial();
   overlay.style.display='flex';
@@ -2443,6 +2450,7 @@ function showTradeModal(type,s,originEl){
   wrap.style.transform='translate3d('+dx+'px,'+dy+'px,0) scale3d('+sx+','+sy+',1)';
   card.style.transition='none';
   card.style.opacity='0'; // only the dense inner content (unreadable at card scale) waits
+  card.style.pointerEvents='none'; // block taps until the scale-up settles — mid-scale coordinates don't match resting layout
   overlay.classList.remove('open');
   void wrap.offsetWidth;
   requestAnimationFrame(()=>{
@@ -2454,6 +2462,7 @@ function showTradeModal(type,s,originEl){
       wrap.style.transform='translate3d(0,0,0) scale3d(1,1,1)';
       card.style.transition='opacity 180ms ease-out 140ms';
       card.style.opacity='1';
+      setTimeout(()=>{card.style.pointerEvents='';},TF_MS);
     });
   });
 }
@@ -2475,13 +2484,14 @@ function hideTradeModal(){
     unlockBodyScroll();
     _modalType=null;_modalId=null;
     tmNavList=[];tmNavIdx=-1;tmAnimating=false;
+    if(tmLockedH!=null){wrap.style.height='';wrap.style.maxHeight='';card.style.height='';tmLockedH=null;}
     tmHideZones();clearTimeout(tmHideT);
   },TF_MS);
 }
 // ═══ TRADE CARD NAVIGATION (Previous / Next, continuous viewer) ═══════
 // Reuses the existing openTrade/showTradeModal viewer and folderMatches
 // order — no second Trade Card system, no reopening, no folder return.
-let tmNavList=[],tmNavIdx=-1,tmAnimating=false,tmHideT=null;
+let tmNavList=[],tmNavIdx=-1,tmAnimating=false,tmHideT=null,tmLockedH=null;
 const TM_EDGE_PX=110,TNAV_OUT_MS=240,TNAV_IN_MS=440,TNAV_EASE='cubic-bezier(.16,1,.3,1)';
 function tmSyncNavContext(){
   if(_modalType==null||_modalId==null){tmNavList=[];tmNavIdx=-1;return;}
@@ -2590,9 +2600,24 @@ function navigateTrade(dir){
   const target=tmNavList[newIdx];
   const type=_modalType;
   const cardEl=document.getElementById('tradeModalCard');
+  const wrapEl=document.getElementById('tradeModalWrap');
   if(!cardEl||!target)return;
   tmKeepNavAlive();
   tmAnimating=true;
+  cardEl.style.pointerEvents='none'; // block taps while the card is mid-transition — a tap on a still-moving/rotating row can miss its target and look like the accordion "didn't expand"
+  // FRAME LOCK — the wrap has no fixed height of its own (it hugs its
+  // content), so swapping in a trade with a different amount of content
+  // would otherwise resize/reflow the visible frame mid-navigation. Freeze
+  // it at its current rendered height the first time the user navigates;
+  // only the content inside (cardEl) keeps animating/scrolling from here.
+  // Cleared again in hideTradeModal() so a fresh single-trade open is
+  // still sized naturally, exactly as before.
+  if(wrapEl&&tmLockedH==null){
+    tmLockedH=wrapEl.getBoundingClientRect().height;
+    wrapEl.style.height=tmLockedH+'px';
+    wrapEl.style.maxHeight=tmLockedH+'px';
+    cardEl.style.height='100%';
+  }
   cardEl.classList.add('tm-navigating'); // suppress imgRise burst on the rebuilt content — see CSS
   const outX=dir>0?-38:38,outRot=dir>0?-7:7;
   cardEl.style.willChange='transform,opacity';
@@ -2617,7 +2642,7 @@ function navigateTrade(dir){
         cardEl.style.transition='transform '+TNAV_IN_MS+'ms '+TNAV_EASE+',opacity '+TNAV_IN_MS+'ms ease-out';
         cardEl.style.transform='translate3d(0,0,0) rotateY(0deg) scale3d(1,1,1)';
         cardEl.style.opacity='1';
-        setTimeout(()=>{tmAnimating=false;cardEl.style.willChange='';cardEl.classList.remove('tm-navigating');},TNAV_IN_MS);
+        setTimeout(()=>{tmAnimating=false;cardEl.style.willChange='';cardEl.style.pointerEvents='';cardEl.classList.remove('tm-navigating');},TNAV_IN_MS);
       });
     });
   },TNAV_OUT_MS);
@@ -2736,7 +2761,7 @@ function buildTF(s,tf){
   const imgH=d.img
     ?'<div class="imgburst"><img src="'+d.img+'" alt="'+tf.pill+'" loading="eager" decoding="async"/><div class="imgburst-ov"></div>'+(viewMode?'':'<label class="rep-btn imgburst-rep" title="Replace" for="'+fi+'"><svg viewBox="0 0 14 14" fill="none"><path d="M2.5 7a4.5 4.5 0 1 0 .9-2.7" stroke="#E8C870" stroke-width="1.3" stroke-linecap="round"/><polyline points="1,2.5 3.4,4.3 3.4,2 1,3.8" fill="#E8C870"/></svg><input type="file" id="'+fi+'" accept="image/*" style="display:none" onchange="hImg(event,'+s.id+',\''+tf.key+'\')"/></label>')+'</div>'
     :viewMode?'<div style="padding:16px;text-align:center;color:rgba(237,232,223,.18);font-size:10px">No chart uploaded</div>':'<label class="imgzone" for="'+fi+'"><svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="rgba(100,80,200,.3)" stroke-width="1" style="position:relative;z-index:1"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="3,17 8,12 13,14 18,8"/></svg><p>Upload '+tf.pill+' chart</p><div class="imgcta">Choose Image</div><input type="file" id="'+fi+'" accept="image/*" style="display:none" onchange="hImg(event,'+s.id+',\''+tf.key+'\')"/></label>';
-  return '<div class="tfsec"><div class="tfacc" onclick="toggleTF('+s.id+',\''+tf.key+'\')"><div class="tfal"><span class="tfpill">'+tf.pill+'</span><span class="tfdesc">'+tf.desc+'</span></div><span class="tfch" id="ch-'+s.id+'-'+tf.key+'">▼</span></div><div class="tfbody" id="tfb-'+s.id+'-'+tf.key+'"><div class="imgslot">'+imgH+'</div>'+flds.map((lbl,i)=>'<div class="fw"><div class="fl">'+lbl+'</div><textarea class="ft" placeholder="'+ph(lbl)+'" onchange="sfld('+s.id+',\''+tf.key+'\',\'f'+i+'\',this.value)"'+(viewMode?' readonly':'')+'>'+(d.f['f'+i]||'')+'</textarea></div>').join('')+'</div></div>';
+  return '<div class="tfsec"><div class="tfacc" onclick="toggleTF('+s.id+',\''+tf.key+'\')"><div class="tfal"><span class="tfpill">'+tf.pill+'</span><span class="tfdesc">'+tf.desc+'</span></div><span class="tfch" id="ch-'+s.id+'-'+tf.key+'">▼</span></div><div class="tfbody" id="tfb-'+s.id+'-'+tf.key+'"><div class="imgslot">'+imgH+'</div>'+flds.map((lbl,i)=>'<div class="fw"><div class="fwh" onclick="toggleFld('+s.id+',\''+tf.key+'\','+i+')"><div class="fl">'+lbl+'</div><span class="fch" id="fc-'+s.id+'-'+tf.key+'-'+i+'">▼</span></div><div class="fwb" id="fb-'+s.id+'-'+tf.key+'-'+i+'"><textarea class="ft" placeholder="'+ph(lbl)+'" onchange="sfld('+s.id+',\''+tf.key+'\',\'f'+i+'\',this.value)"'+(viewMode?' readonly':'')+'>'+(d.f['f'+i]||'')+'</textarea></div></div>').join('')+'</div></div>';
 }
 function buildFooter(s){
   const bef=s.baImg?.before,aft=s.baImg?.after;
@@ -2746,8 +2771,8 @@ function buildFooter(s){
     ?'<span id="orow-'+s.id+'" class="out-badge out-'+outcomeClass(s.outcome)+'">'+outcomeLabel(s.outcome)+'</span>'
     :'<select class="ob-select" onchange="setOutcome('+s.id+',\''+s.type+'\',this.value)"><option value="pending" '+((!s.outcome||s.outcome==='pending')?'selected':'')+'>— Pending</option><option value="profit" '+(s.outcome==='profit'?'selected':'')+'>✓ Profit</option><option value="loss" '+(s.outcome==='loss'?'selected':'')+'>✕ Loss</option><option value="breakeven" '+(s.outcome==='breakeven'?'selected':'')+'>● Breakeven</option></select>')+'</div>';
   const recHTML='<div class="rec"><div class="rech"><span>Trade Record · Before & After</span><span style="color:rgba(196,151,58,.28);font-size:7px">Entry · Exit Documentation</span></div><div class="recb"><div class="bagrid"><div class="baslot" id="bas-'+s.id+'-before"><div class="balbl">Before Entry</div>'+(bef?'<div class="baburst"><img src="'+bef+'" alt="Before" loading="eager" decoding="async"/><div class="baburst-ov"></div>'+(viewMode?'':'<label class="rep-btn baburst-rep" title="Replace" for="bab-'+s.id+'"><svg viewBox="0 0 14 14" fill="none"><path d="M2.5 7a4.5 4.5 0 1 0 .9-2.7" stroke="#E8C870" stroke-width="1.3" stroke-linecap="round"/><polyline points="1,2.5 3.4,4.3 3.4,2 1,3.8" fill="#E8C870"/></svg><input type="file" id="bab-'+s.id+'" accept="image/*" style="display:none" onchange="hBA(event,'+s.id+',\'before\')"/></label>')+'</div>':viewMode?'<div style="padding:16px;text-align:center;color:rgba(237,232,223,.18);font-size:10px">No image</div>':'<label class="bazone" for="bab-'+s.id+'"><p>Chart at entry</p><span>Upload</span><input type="file" id="bab-'+s.id+'" accept="image/*" style="display:none" onchange="hBA(event,'+s.id+',\'before\')"/></label>')+'</div><div class="baslot" id="bas-'+s.id+'-after"><div class="balbl">After Take Profit</div>'+(aft?'<div class="baburst"><img src="'+aft+'" alt="After" loading="eager" decoding="async"/><div class="baburst-ov"></div>'+(viewMode?'':'<label class="rep-btn baburst-rep" title="Replace" for="baa-'+s.id+'"><svg viewBox="0 0 14 14" fill="none"><path d="M2.5 7a4.5 4.5 0 1 0 .9-2.7" stroke="#E8C870" stroke-width="1.3" stroke-linecap="round"/><polyline points="1,2.5 3.4,4.3 3.4,2 1,3.8" fill="#E8C870"/></svg><input type="file" id="baa-'+s.id+'" accept="image/*" style="display:none" onchange="hBA(event,'+s.id+',\'after\')"/></label>')+'</div>':viewMode?'<div style="padding:16px;text-align:center;color:rgba(237,232,223,.18);font-size:10px">No image</div>':'<label class="bazone" for="baa-'+s.id+'"><p>Chart at TP hit</p><span>Upload</span><input type="file" id="baa-'+s.id+'" accept="image/*" style="display:none" onchange="hBA(event,'+s.id+',\'after\')"/></label>')+'</div></div></div>';
-  const breakdownHTML='<div><div class="bdlbl">Full Top-Down Breakdown</div><textarea class="ft" style="min-height:100px" placeholder="Complete top-down breakdown — macro narrative, daily confirmation, 4H setup, entry rationale, how the trade played out…" onchange="ssf('+s.id+',\'breakdown\',this.value)"'+(viewMode?' readonly':'')+'>'+(s.breakdown||'')+'</textarea></div>';
-  return '<div class="sfoot"><div class="sfh">Trade Setup</div><div class="svals"><div class="sv sv-gold"><span class="svl">Entry Zone</span><input class="svi" placeholder="68.50–69.00" value="'+(s.entry||'')+'" onchange="ssf('+s.id+',\'entry\',this.value)"'+(viewMode?' readonly':'')+'></div><div class="sv sv-red"><span class="svl">Stop Loss</span><input class="svi" placeholder="71.50" value="'+(s.sl||'')+'" onchange="ssf('+s.id+',\'sl\',this.value)"'+(viewMode?' readonly':'')+'></div><div class="sv sv-green"><span class="svl">Take Profit</span><input class="svi" placeholder="65.50" value="'+(s.tp||'')+'" onchange="ssf('+s.id+',\'tp\',this.value)"'+(viewMode?' readonly':'')+'></div><div class="sv sv-gold"><span class="svl">Risk / Reward</span><input class="svi" placeholder="3.2:1" value="'+(s.rr||'')+'" onchange="ssf('+s.id+',\'rr\',this.value)"'+(viewMode?' readonly':'')+'></div></div>'+biasHTML+recHTML+outcomeHTML+breakdownHTML+'</div>';
+  const breakdownHTML='<div class="tfsec bdsec"><div class="tfacc" onclick="toggleBD('+s.id+')"><span class="bdlbl" style="margin-bottom:0">Full Top-Down Analysis</span><span class="tfch" id="bdch-'+s.id+'">▼</span></div><div class="tfbody" id="bdb-'+s.id+'"><textarea class="ft" style="min-height:100px" placeholder="Complete top-down breakdown — macro narrative, daily confirmation, 4H setup, entry rationale, how the trade played out…" onchange="ssf('+s.id+',\'breakdown\',this.value)"'+(viewMode?' readonly':'')+'>'+(s.breakdown||'')+'</textarea></div></div>';
+  return '<div class="sfoot"><div class="sfh">Trade Setup</div><div class="svals"><div class="sv sv-gold"><span class="svl">Entry Zone</span><input class="svi" placeholder="68.50–69.00" value="'+(s.entry||'')+'" onchange="ssf('+s.id+',\'entry\',this.value)"'+(viewMode?' readonly':'')+'></div><div class="sv sv-red"><span class="svl">Stop Loss</span><input class="svi" placeholder="71.50" value="'+(s.sl||'')+'" onchange="ssf('+s.id+',\'sl\',this.value)"'+(viewMode?' readonly':'')+'></div><div class="sv sv-green"><span class="svl">Take Profit</span><input class="svi" placeholder="65.50" value="'+(s.tp||'')+'" onchange="ssf('+s.id+',\'tp\',this.value)"'+(viewMode?' readonly':'')+'></div><div class="sv sv-gold"><span class="svl">Risk / Reward</span><input class="svi" placeholder="3.2:1" value="'+(s.rr||'')+'" onchange="ssf('+s.id+',\'rr\',this.value)"'+(viewMode?' readonly':'')+'></div></div>'+biasHTML+recHTML+breakdownHTML+outcomeHTML+'</div>';
 }
 
 // ═══ HELPERS ══════════════════════════════════════════════════
@@ -2755,6 +2780,8 @@ function ph(l){const ll=l.toLowerCase();if(ll.includes('structure'))return 'HH/H
 function fmtDate(d){try{return new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}catch{return d}}
 function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function toggleTF(id,key){const b=document.getElementById('tfb-'+id+'-'+key),c=document.getElementById('ch-'+id+'-'+key);b.classList.toggle('open');c.style.transform=b.classList.contains('open')?'rotate(180deg)':'';}
+function toggleBD(id){const b=document.getElementById('bdb-'+id),c=document.getElementById('bdch-'+id);b.classList.toggle('open');c.style.transform=b.classList.contains('open')?'rotate(180deg)':'';}
+function toggleFld(id,key,fi){const b=document.getElementById('fb-'+id+'-'+key+'-'+fi),c=document.getElementById('fc-'+id+'-'+key+'-'+fi);b.classList.toggle('open');c.style.transform=b.classList.contains('open')?'rotate(180deg)':'';}
 function allS(){return[...setups.swing,...setups.intraday]}
 
 // Uploads the ORIGINAL file to Supabase Storage untouched — no canvas
@@ -3073,6 +3100,8 @@ function buildExportHTML(snap){
 const vc=document.getElementById('vgc'),vx=vc.getContext('2d');
 function vdraw(){const W=vc.width=window.innerWidth,H=vc.height=document.documentElement.scrollHeight;const bg=vx.createLinearGradient(0,0,W,H);bg.addColorStop(0,'#06071A');bg.addColorStop(.5,'#08091E');bg.addColorStop(1,'#06071A');vx.fillStyle=bg;vx.fillRect(0,0,W,H);[{x:.8,y:.08,r:.5,c:'rgba(100,80,200,0.18)'},{x:.1,y:.5,r:.4,c:'rgba(50,40,140,0.18)'},{x:.5,y:.25,r:.3,c:'rgba(196,151,58,0.04)'},{x:.9,y:.75,r:.35,c:'rgba(130,100,220,0.1)'}].forEach(({x,y,r,c})=>{const rg=vx.createRadialGradient(W*x,H*y,0,W*x,H*y,H*r);rg.addColorStop(0,c);rg.addColorStop(1,'transparent');vx.fillStyle=rg;vx.fillRect(0,0,W,H);});[[0,H*.3,W*.4,0,W*.8,H*.4],[W*.2,H,W*.7,H*.3,W,H*.7]].forEach(p=>{vx.strokeStyle='rgba(100,80,200,0.05)';vx.lineWidth=1;vx.beginPath();vx.moveTo(p[0],p[1]);vx.lineTo(p[2],p[3]);vx.lineTo(p[4],p[5]);vx.closePath();vx.stroke();});vx.fillStyle='rgba(100,80,200,0.07)';for(let x=100;x<W;x+=120){for(let y=100;y<H;y+=120){vx.fillRect(x,y,1.5,1.5)}}[[.08,.04],[.92,.06],[.05,.25],[.95,.3],[.12,.5],[.88,.55],[.5,.12],[.48,.62],[.72,.18],[.28,.45]].forEach(([sx,sy])=>{const x2=W*sx,y2=H*sy;vx.fillStyle='rgba(196,151,58,0.3)';vx.beginPath();vx.arc(x2,y2,1,0,Math.PI*2);vx.fill();vx.strokeStyle='rgba(196,151,58,0.09)';vx.lineWidth=.5;vx.beginPath();vx.moveTo(x2-6,y2);vx.lineTo(x2+6,y2);vx.stroke();vx.beginPath();vx.moveTo(x2,y2-6);vx.lineTo(x2,y2+6);vx.stroke();});}
 vdraw();window.addEventListener('resize',vdraw);
+function vToggleFld(id,key,fi){const b=document.getElementById('vfb-'+id+'-'+key+'-'+fi),c=document.getElementById('vfc-'+id+'-'+key+'-'+fi);b.classList.toggle('open');c.style.transform=b.classList.contains('open')?'rotate(180deg)':'';}
+function vToggleBD(id){const b=document.getElementById('vbdb-'+id),c=document.getElementById('vbdc-'+id);b.classList.toggle('open');c.style.transform=b.classList.contains('open')?'rotate(180deg)':'';}
 <\/script>
 </body>
 </html>`;
@@ -3103,7 +3132,7 @@ function buildStaticTF(s,tf){
   const d=s.tfs[tf.key]||{img:null,f:{}};
   const flds=FLDS[tf.key]||['Market Structure','Analysis & Confluence'];
   const imgH=d.img?`<div class="v-img-wrap"><img src="${d.img}" alt="${escH(tf.pill)} chart" loading="lazy" decoding="async"/></div>`:'';
-  const fieldsH=flds.map((lbl,i)=>{const v=(d.f['f'+i]||'').trim();return v?`<div class="v-field"><div class="v-fl">${escH(lbl)}</div><div class="v-ft">${escH(v)}</div></div>`:''}).join('');
+  const fieldsH=flds.map((lbl,i)=>{const v=(d.f['f'+i]||'').trim();return v?`<div class="v-field"><div class="v-fwh" onclick="vToggleFld('${s.id}','${tf.key}',${i})"><div class="v-fl">${escH(lbl)}</div><span class="v-fch" id="vfc-${s.id}-${tf.key}-${i}">▼</span></div><div class="v-fwb" id="vfb-${s.id}-${tf.key}-${i}"><div class="v-ft">${escH(v)}</div></div></div>`:''}).join('');
   if(!imgH&&!fieldsH)return '';
   return `<div class="v-tf">
     <div class="v-tfh"><span class="v-tfpill">${escH(tf.pill)}</span><span class="v-tfd">${escH(tf.desc)}</span></div>
@@ -3135,7 +3164,7 @@ function buildStaticSetup(s){
         ${hasAfter?`<div class="v-ba-img"><img src="${s.baImg.after}" alt="After TP" loading="lazy" decoding="async"/></div>`:'<div class="v-ba-empty">Not recorded</div>'}
       </div>
     </div>`:''}
-    ${hasBreakdown?`<div class="v-bd-lbl">Full Top-Down Breakdown</div><div class="v-bd">${escH(s.breakdown)}</div>`:''}
+    ${hasBreakdown?`<div class="v-bdh" onclick="vToggleBD('${s.id}')"><div class="v-bd-lbl">Full Top-Down Analysis</div><span class="v-fch" id="vbdc-${s.id}">▼</span></div><div class="v-fwb" id="vbdb-${s.id}"><div class="v-bd">${escH(s.breakdown)}</div></div>`:''}
   </div>`;
 }
 
@@ -3226,7 +3255,12 @@ section{padding-top:64px;margin-bottom:24px}
 .v-img-wrap{margin:-2px -2px 0;border-radius:14px 14px 0 0;overflow:hidden;box-shadow:0 -8px 40px rgba(100,80,200,.2),0 0 0 1px rgba(196,151,58,.08),0 20px 60px rgba(0,0,0,.5)}
 .v-img-wrap img{width:100%;max-height:340px;object-fit:contain;display:block;background:#000}
 .v-field{padding:14px 26px;border-top:1px solid rgba(255,255,255,.04)}
-.v-fl{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:3px;color:rgba(196,151,58,.44);text-transform:uppercase;margin-bottom:6px}
+.v-fwh{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;gap:10px}
+.v-fl{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:3px;color:rgba(196,151,58,.44);text-transform:uppercase;margin-bottom:0}
+.v-fch{font-size:9px;color:var(--cream3);transition:transform .3s cubic-bezier(.22,1,.36,1),color .2s;font-family:'DM Mono',monospace;flex-shrink:0;line-height:1}
+.v-fwh:hover .v-fch{color:var(--gold3)}
+.v-fwb{display:none;margin-top:6px}
+.v-fwb.open{display:block}
 .v-ft{font-size:13px;color:var(--cream2);line-height:1.75;font-weight:300;white-space:pre-wrap}
 
 /* SETUP */
@@ -3247,7 +3281,8 @@ section{padding-top:64px;margin-bottom:24px}
 .v-ba-img{border-radius:10px;overflow:hidden;border:1px solid rgba(100,80,200,.18);box-shadow:0 0 0 1px rgba(196,151,58,.06),0 14px 44px rgba(0,0,0,.4)}
 .v-ba-img img{width:100%;max-height:200px;object-fit:contain;display:block;background:#000}
 .v-ba-empty{padding:20px;text-align:center;color:rgba(237,232,223,.2);font-size:10px;border:1px dashed rgba(100,80,200,.15);border-radius:10px}
-.v-bd-lbl{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:3px;color:rgba(196,151,58,.44);text-transform:uppercase;margin-bottom:8px}
+.v-bdh{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;gap:10px;margin-bottom:8px}
+.v-bd-lbl{font-family:'DM Mono',monospace;font-size:9px;font-weight:500;letter-spacing:3px;color:var(--gold3);text-transform:uppercase;margin-bottom:0}
 .v-bd{font-size:13px;color:var(--cream2);line-height:1.8;font-weight:300;white-space:pre-wrap;background:rgba(0,0,0,.18);border:1px solid rgba(100,80,200,.12);border-radius:10px;padding:14px 16px}
 
 /* CERTS */
@@ -4021,6 +4056,27 @@ function addCredential(){
     const top=Math.round(r.top+inset),right=Math.round(window.innerWidth-r.right+inset);
     btn.style.top=top+'px';btn.style.right=right+'px';
     card.style.top=top+'px';card.style.right=right+'px';
+    // ── Mobile-only responsive containment ─────────────────────────
+    // #lb-notes-card's width/max-height (see the max-width:640px rules
+    // above) are otherwise bounded only by the viewport, which is what
+    // let the card spread past the chart image on narrow phones. Here
+    // it's additionally clamped to the ACTUAL rendered chart rect it's
+    // already anchored to (same r/inset used for top/right above), so
+    // it can never exceed the chart's own width or height. This only
+    // ever shrinks the card relative to what the desktop/base CSS
+    // already allows — desktop (anything above the 640px breakpoint)
+    // is untouched, both here and in its own CSS rules.
+    const lbnPanel=card.querySelector('.lbn-panel');
+    if(window.matchMedia('(max-width:640px)').matches){
+      const availW=Math.max(180,Math.round(r.width-inset*2));
+      const availH=Math.max(180,Math.round(r.height-inset*2));
+      card.style.maxWidth=availW+'px';
+      card.style.maxHeight=availH+'px';
+      if(lbnPanel)lbnPanel.style.maxHeight=availH+'px';
+    }else{
+      card.style.maxWidth='';card.style.maxHeight='';
+      if(lbnPanel)lbnPanel.style.maxHeight='';
+    }
     if(glow){
       glow.style.top=Math.round(r.top)+'px';glow.style.left=Math.round(r.left)+'px';
       glow.style.width=Math.round(r.width)+'px';glow.style.height=Math.round(r.height)+'px';
@@ -4080,7 +4136,24 @@ function addCredential(){
     btn.classList.toggle('show',positioned);
     if(lbNotesOpen)lbRenderNotesCard(); // keep an already-open card live as the chart changes
   }
-  new MutationObserver(lbSync).observe(lb,{attributes:true,attributeFilter:['class']});
+  // #lb also gets 'zoomed-in' toggled on every pinch/scroll-zoom threshold
+  // crossing and 'controls-hidden' toggled on the idle timer — neither
+  // ever moves or resizes the chart image, and both are already handled
+  // purely by the CSS descendant selectors above (e.g.
+  // `#lb.open.controls-hidden #lb-notes-btn`). Re-running the full
+  // lbSync → lbPositionUI → getBoundingClientRect measure-and-reposition
+  // path on those irrelevant class changes was pure churn — extra forced
+  // layout reads/writes for no visual reason — and the exact kind of
+  // thing that shows up as an occasional stray pixel jump or flicker on
+  // the button. Only an actual open/close transition needs a fresh
+  // sync+position; everything else is left to CSS.
+  let lbWasOpenAttr=false;
+  new MutationObserver(()=>{
+    const isOpen=lb.classList.contains('open');
+    if(isOpen===lbWasOpenAttr)return;
+    lbWasOpenAttr=isOpen;
+    lbSync();
+  }).observe(lb,{attributes:true,attributeFilter:['class']});
   new MutationObserver(lbSync).observe(lbImg,{attributes:true,attributeFilter:['src']});
   // Two different jobs share this one 'load' event, told apart by
   // flipPending: mid-flip, the image finishing download means flipIn's
@@ -4094,7 +4167,18 @@ function addCredential(){
     if(flipPending){clearTimeout(flipFallback);flipFallback=setTimeout(settleFlip,520);}
     else lbSync();
   });
-  window.addEventListener('resize',()=>{if(lb.classList.contains('open')&&!flipPending)lbPositionUI();},{passive:true});
+  // Coalesced to once per animation frame: mobile browsers fire a burst of
+  // resize events while the address bar animates in/out, and running the
+  // full measure+reposition on every single one of them was redundant
+  // layout thrashing that risked visible jitter mid-animation. This still
+  // settles the button/card within a frame of the final size — no
+  // perceptible delay — just without the repeated intermediate writes.
+  let lbResizeRAF=null;
+  window.addEventListener('resize',()=>{
+    if(!(lb.classList.contains('open')&&!flipPending))return;
+    if(lbResizeRAF)return;
+    lbResizeRAF=requestAnimationFrame(()=>{lbResizeRAF=null;lbPositionUI();});
+  },{passive:true});
   // Keep clicks/drags/wheel/touch on the button & card from bubbling into
   // the existing document-level pan/zoom/swipe listeners above.
   ['mousedown','wheel','touchstart','touchmove','touchend'].forEach(evt=>{
