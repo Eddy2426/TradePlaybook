@@ -1011,9 +1011,6 @@ body>*:not(#gc):not(.nav):not(.overlay):not(#auth-screen):not(.bbar):not(.vbadge
 .tm-navzone-l{left:0;justify-content:flex-start;padding-left:16px}
 .tm-navzone-r{right:0;justify-content:flex-end;padding-right:16px}
 .tm-navbtn{position:relative;z-index:1}
-@media(hover:none){
-  #tradeModalOverlay.open .tm-navzone{opacity:1;pointer-events:auto}
-}
 /* ── "LIVE" HOLOGRAPHIC NAV PRESENCE — scoped strictly to .tm-navbtn
    (the trade-modal nav buttons only), never .lb-navbtn's base rules, so
    the unrelated chart-lightbox Prev/Next is completely unaffected.
@@ -1190,16 +1187,16 @@ body>*:not(#gc):not(.nav):not(.overlay):not(#auth-screen):not(.bbar):not(.vbadge
 }
 
 /* ---- CPU/GPU load: stop continuous decorative infinite animations ----
-   These are all "ambient" effects (title shimmer, folder glow, cert
-   ornament pulses, background constellation) that loop forever at all
-   times the app is open, several of them scaling with how much data is
-   on screen (one glow per pair folder, per certificate). Frozen at a
-   representative static value on mobile — same look, no per-frame
-   repaint/compositing cost. Desktop keeps the full animated versions. */
+   These are "ambient" effects (title shimmer, cert ornament pulses,
+   background constellation) that loop forever at all times the app is
+   open, several of them scaling with how much data is on screen (one
+   pulse per certificate, etc). Frozen at a representative static value
+   on mobile — same look, no per-frame repaint/compositing cost. Folder
+   glow is deliberately excluded from this freeze — it now runs the
+   exact same animated pulse as desktop on mobile too. */
 @media(max-width:900px),(hover:none) and (pointer:coarse){
   .nav-name{animation:none!important;text-shadow:0 0 10px rgba(232,200,112,.35)}
   .cov-h1,.cov-h1 em{animation:none!important}
-  .folder-glow{animation:none!important;opacity:.75}
   .cgorn{animation:none!important;opacity:.85}
   .cgorn .cdot{animation:none!important;box-shadow:0 0 6px rgba(232,200,112,.7)}
   .bg-const .cline,.bg-const .cline-soft,.bg-const .cnode,.bg-neb,.bg-fx-parallax{
@@ -2576,6 +2573,19 @@ function tmOverlayMouseMove(e){
   }
 }
 document.getElementById('tradeModalOverlay')?.addEventListener('mousemove',tmOverlayMouseMove);
+// Touch equivalent of the mousemove reveal above — mobile (hover:none)
+// has no mousemove, so without this the nav zones would only ever show
+// via tmShowInitial()'s one-time reveal on open and then never come
+// back, since the zones sit at pointer-events:none once hidden. Any
+// touch anywhere in the viewer now reveals+keeps-alive exactly like a
+// mouse movement does on desktop — same .show class, same shared timer,
+// so mobile ends up on the identical show/auto-hide behavior as desktop
+// instead of the old "always visible, no timer" special-case.
+document.getElementById('tradeModalOverlay')?.addEventListener('touchstart',(e)=>{
+  const t=e.touches&&e.touches[0];
+  if(!t)return;
+  tmOverlayMouseMove({clientX:t.clientX});
+},{passive:true});
 ['tmNavL','tmNavR'].forEach(id=>{
   const zone=document.getElementById(id);
   if(!zone)return;
