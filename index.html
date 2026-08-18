@@ -400,6 +400,26 @@ body{background:var(--ink);color:var(--cream);font-family:'Outfit',sans-serif;he
   transition:opacity .28s cubic-bezier(.19,1,.22,1),transform .28s cubic-bezier(.19,1,.22,1),visibility 0s linear .28s}
 #lb-notes-card.open{opacity:1;visibility:visible;pointer-events:auto;transform:translateY(0) scale(1);
   transition:opacity .28s cubic-bezier(.19,1,.22,1),transform .28s cubic-bezier(.19,1,.22,1),visibility 0s linear 0s}
+/* ── Analysis Card ZOOM overlay — a controlled, independent enlargement
+   triggered only by .lbn-zoom-btn above. Centers the card as a bigger
+   floating overlay (still fully inside #lb, never touching #lb-inner,
+   the chart, or the chart's own zoom/pan) instead of the normal
+   chart-corner-anchored position/size set by lbPositionUI(). Toggling
+   this class never resizes #lb, #lb-inner, or #lb-img/#lb-canvas —
+   only #lb-notes-card's own box. .lbn-zoom-anim is added transiently by
+   toggleLBNotesZoom() JS just for the duration of the resize, so the
+   width/max-height/position change animates smoothly instead of
+   snapping, without permanently adding transitions to every normal
+   top/right reposition lbPositionUI() does elsewhere. */
+#lb-notes-card.lbn-zoomed{top:50%;left:50%;right:auto;
+  width:min(640px,92vw);max-width:92vw;max-height:min(88vh,860px)}
+#lb-notes-card.lbn-zoomed.open{transform:translate(-50%,-50%) scale(1)}
+#lb-notes-card.lbn-zoom-anim{transition:opacity .28s cubic-bezier(.19,1,.22,1),
+  transform .32s cubic-bezier(.22,1,.36,1),width .32s cubic-bezier(.22,1,.36,1),
+  max-width .32s cubic-bezier(.22,1,.36,1),max-height .32s cubic-bezier(.22,1,.36,1),
+  top .32s cubic-bezier(.22,1,.36,1),left .32s cubic-bezier(.22,1,.36,1),
+  right .32s cubic-bezier(.22,1,.36,1),visibility 0s linear 0s}
+#lb-notes-card.lbn-zoomed .lbn-panel{max-height:min(88vh,860px)}
 @media(prefers-reduced-motion:reduce){.lbn-panel::after{animation:none!important}}
 .lbn-panel{position:relative;display:flex;flex-direction:column;max-height:calc(100vh - 106px);border-radius:10px;overflow:hidden;
   background:
@@ -441,6 +461,15 @@ body{background:var(--ink);color:var(--cream);font-family:'Outfit',sans-serif;he
 #lb-notes-close{width:22px;height:22px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;
   color:rgba(237,232,223,.4);cursor:pointer;font-size:13px;transition:color .2s ease-out,background .2s ease-out}
 #lb-notes-close:hover{color:var(--gold3);background:rgba(196,151,58,.14)}
+/* ── Analysis Card's own dedicated zoom control — independent of the
+   chart's zoom controls (.lb-tbtn/#lb-toolbar), never touches or calls
+   into them. Toggles the .lbn-zoomed state on #lb-notes-card below. ── */
+.lbn-zoom-btn{width:22px;height:22px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  color:rgba(232,200,112,.6);cursor:pointer;background:transparent;border:1px solid transparent;padding:0;
+  font:inherit;transition:color .2s ease-out,background .2s ease-out,border-color .2s ease-out,transform .15s ease-out}
+.lbn-zoom-btn:hover{color:var(--gold3);background:rgba(196,151,58,.14);border-color:rgba(196,151,58,.22)}
+.lbn-zoom-btn:active{transform:scale(.92)}
+.lbn-zoom-btn.lbn-zoom-active{color:var(--gold3);background:rgba(196,151,58,.16);border-color:rgba(196,151,58,.3)}
 #lb-notes-body{padding:13px 16px 18px;overflow-y:auto;overscroll-behavior:contain;flex:1;min-height:0}
 #lb-notes-body::-webkit-scrollbar{width:4px}
 #lb-notes-body::-webkit-scrollbar-thumb{background:rgba(196,151,58,.25);border-radius:4px}
@@ -1311,6 +1340,7 @@ body>*:not(#gc):not(.nav):not(.overlay):not(#auth-screen):not(.bbar):not(.vbadge
     <div class="lbn-panel">
       <div id="lb-notes-head">
         <span id="lb-notes-title">Analysis</span>
+        <button id="lb-notes-zoom" class="lbn-zoom-btn" onclick="event.stopPropagation();toggleLBNotesZoom()" type="button" title="Expand analysis" aria-label="Expand analysis"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button>
         <div id="lb-notes-close" onclick="closeLBNotes()" role="button" aria-label="Close analysis">×</div>
       </div>
       <div id="lb-notes-body"></div>
@@ -2482,6 +2512,7 @@ function hideTradeModal(){
     _modalType=null;_modalId=null;
     tmNavList=[];tmNavIdx=-1;tmAnimating=false;
     if(tmLockedH!=null){wrap.style.height='';wrap.style.maxHeight='';card.style.height='';tmLockedH=null;}
+    wrap.style.transition='';clearTimeout(tmHeightAnimT);
     tmHideZones();clearTimeout(tmHideT);
   },TF_MS);
 }
@@ -2614,6 +2645,7 @@ function navigateTrade(dir){
   if(!cardEl||!target)return;
   tmKeepNavAlive();
   tmAnimating=true;
+  clearTimeout(tmHeightAnimT); // cancel any still-finishing accordion height sync so it can't release the frame mid-navigation
   cardEl.style.pointerEvents='none'; // block taps while the card is mid-transition — a tap on a still-moving/rotating row can miss its target and look like the accordion "didn't expand"
   // FRAME LOCK — the wrap has no fixed height of its own (it hugs its
   // content), so swapping in a trade with a different amount of content
@@ -2652,7 +2684,7 @@ function navigateTrade(dir){
         cardEl.style.transition='transform '+TNAV_IN_MS+'ms '+TNAV_EASE+',opacity '+TNAV_IN_MS+'ms ease-out';
         cardEl.style.transform='translate3d(0,0,0) rotateY(0deg) scale3d(1,1,1)';
         cardEl.style.opacity='1';
-        setTimeout(()=>{tmAnimating=false;cardEl.style.willChange='';cardEl.style.pointerEvents='';cardEl.classList.remove('tm-navigating');},TNAV_IN_MS);
+        setTimeout(()=>{tmAnimating=false;cardEl.style.willChange='';cardEl.style.pointerEvents='';cardEl.classList.remove('tm-navigating');tmAnimateWrapHeight();},TNAV_IN_MS);
       });
     });
   },TNAV_OUT_MS);
@@ -2789,9 +2821,50 @@ function buildFooter(s){
 function ph(l){const ll=l.toLowerCase();if(ll.includes('structure'))return 'HH/HL/LH/LL, patterns, what broke, price vs key levels…';if(ll.includes('weekly'))return 'Macro narrative, dominant structural levels, long-term direction…';if(ll.includes('daily'))return 'Trend confirmation, key AOIs, pattern forming on daily…';if(ll.includes('4h'))return '4H confluence — what confirms the higher TF thesis?';if(ll.includes('1h'))return '1H momentum, pattern trigger, AOI refinement…';if(ll.includes('15m'))return '15M precision — trigger candle, exact timing, final confirmation…';return 'Add your analysis…'}
 function fmtDate(d){try{return new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}catch{return d}}
 function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
-function toggleTF(id,key){const b=document.getElementById('tfb-'+id+'-'+key),c=document.getElementById('ch-'+id+'-'+key);b.classList.toggle('open');c.style.transform=b.classList.contains('open')?'rotate(180deg)':'';}
-function toggleBD(id){const b=document.getElementById('bdb-'+id),c=document.getElementById('bdch-'+id);b.classList.toggle('open');c.style.transform=b.classList.contains('open')?'rotate(180deg)':'';}
-function toggleFld(id,key,fi){const b=document.getElementById('fb-'+id+'-'+key+'-'+fi),c=document.getElementById('fc-'+id+'-'+key+'-'+fi);b.classList.toggle('open');c.style.transform=b.classList.contains('open')?'rotate(180deg)':'';}
+function toggleTF(id,key){const b=document.getElementById('tfb-'+id+'-'+key),c=document.getElementById('ch-'+id+'-'+key);b.classList.toggle('open');c.style.transform=b.classList.contains('open')?'rotate(180deg)':'';tmAnimateWrapHeight();}
+function toggleBD(id){const b=document.getElementById('bdb-'+id),c=document.getElementById('bdch-'+id);b.classList.toggle('open');c.style.transform=b.classList.contains('open')?'rotate(180deg)':'';tmAnimateWrapHeight();}
+function toggleFld(id,key,fi){const b=document.getElementById('fb-'+id+'-'+key+'-'+fi),c=document.getElementById('fc-'+id+'-'+key+'-'+fi);b.classList.toggle('open');c.style.transform=b.classList.contains('open')?'rotate(180deg)':'';tmAnimateWrapHeight();}
+// ── FRAME HEIGHT SYNC — keeps #tradeModalWrap (the outer frame) matched
+// to the open trade card's actual content height whenever an accordion
+// inside it (timeframe / field / Full Top-Down Analysis) is expanded or
+// collapsed, and once more right after navigateTrade()'s 3D swap settles
+// so the frame adopts the new card's own height. Deliberately a no-op
+// while tmAnimating is true — that window belongs to navigateTrade()'s
+// FRAME LOCK, which keeps the frame completely still during the actual
+// Previous/Next transition. This never touches the transform/box-shadow
+// transition (TF_PROPS) already driving the open/close FLIP and the
+// outcome-color glow — it only adds height/max-height to it for the
+// duration of this one resize, then hands the frame back to natural
+// (unset) sizing so nothing stays permanently pinned.
+let tmHeightAnimT=null;
+const TM_HEIGHT_MS=380,TM_HEIGHT_EASE='cubic-bezier(.22,1,.36,1)';
+function tmAnimateWrapHeight(){
+  if(tmAnimating)return;
+  const overlay=document.getElementById('tradeModalOverlay');
+  if(!overlay||overlay.style.display!=='flex')return;
+  const wrapEl=document.getElementById('tradeModalWrap'),cardEl=document.getElementById('tradeModalCard');
+  if(!wrapEl||!cardEl)return;
+  clearTimeout(tmHeightAnimT);
+  const fromH=wrapEl.getBoundingClientRect().height;
+  wrapEl.style.transition='none';
+  wrapEl.style.height='';wrapEl.style.maxHeight='';cardEl.style.height='';
+  const toH=wrapEl.getBoundingClientRect().height; // natural height for the card's current state
+  if(Math.abs(toH-fromH)<0.5){tmLockedH=null;return;} // already matches — nothing to animate, stays on natural sizing
+  wrapEl.style.height=fromH+'px';wrapEl.style.maxHeight=fromH+'px';cardEl.style.height='100%';
+  void wrapEl.offsetHeight; // commit the start height before animating, same FLIP pattern used elsewhere
+  requestAnimationFrame(()=>{
+    requestAnimationFrame(()=>{
+      wrapEl.style.transition=TF_PROPS+', height '+TM_HEIGHT_MS+'ms '+TM_HEIGHT_EASE+', max-height '+TM_HEIGHT_MS+'ms '+TM_HEIGHT_EASE;
+      wrapEl.style.height=toH+'px';wrapEl.style.maxHeight=toH+'px';
+      tmLockedH=toH;
+      tmHeightAnimT=setTimeout(()=>{
+        wrapEl.style.transition=TF_PROPS;
+        wrapEl.style.height='';wrapEl.style.maxHeight='';cardEl.style.height='';
+        tmLockedH=null; // back to hugging content naturally — next navigateTrade() call will freeze fresh from here
+      },TM_HEIGHT_MS);
+    });
+  });
+}
 function allS(){return[...setups.swing,...setups.intraday]}
 
 // Uploads the ORIGINAL file to Supabase Storage untouched — no canvas
@@ -3947,6 +4020,9 @@ function addCredential(){
 // every existing open/close/next/prev path already updates).
 (function(){
   let lbNotesOpen=false;
+  let lbnZoomAnimT=null;
+  const LBN_ZOOM_ICON_EXPAND='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
+  const LBN_ZOOM_ICON_COLLAPSE='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v3a2 2 0 0 1-2 2H4"/><path d="M21 9h-3a2 2 0 0 1-2-2V4"/><path d="M3 15h3a2 2 0 0 1 2 2v3"/><path d="M15 21v-3a2 2 0 0 1 2-2h3"/></svg>';
   function lbActiveSetup(){
     if(_modalType==null||_modalId==null)return null;
     return (setups[_modalType]||[]).find(x=>x.id===_modalId)||null;
@@ -4034,8 +4110,17 @@ function addCredential(){
   };
   window.closeLBNotes=function(){
     const card=document.getElementById('lb-notes-card');
-    if(card)card.classList.remove('open');
+    if(card){card.classList.remove('open');card.classList.remove('lbn-zoomed');}
     lbNotesOpen=false;
+    // Always hand the zoom button back to its "expand" state on close, so
+    // the next time the Analysis card is opened it starts back at its
+    // normal chart-contained size, never reopening already-zoomed.
+    const zoomBtn=document.getElementById('lb-notes-zoom');
+    if(zoomBtn){
+      zoomBtn.innerHTML=LBN_ZOOM_ICON_EXPAND;
+      zoomBtn.classList.remove('lbn-zoom-active');
+      zoomBtn.title='Expand analysis';zoomBtn.setAttribute('aria-label','Expand analysis');
+    }
   };
   const lb=document.getElementById('lb'),lbImg=document.getElementById('lb-img'),
         btn=document.getElementById('lb-notes-btn'),card=document.getElementById('lb-notes-card'),
@@ -4065,27 +4150,26 @@ function addCredential(){
     const inset=Math.max(20,Math.min(32,r.width*.035)); // comfortably inside the frame, scales with chart size
     const top=Math.round(r.top+inset),right=Math.round(window.innerWidth-r.right+inset);
     btn.style.top=top+'px';btn.style.right=right+'px';
-    card.style.top=top+'px';card.style.right=right+'px';
-    // ── Mobile-only responsive containment ─────────────────────────
-    // #lb-notes-card's width/max-height (see the max-width:640px rules
-    // above) are otherwise bounded only by the viewport, which is what
-    // let the card spread past the chart image on narrow phones. Here
-    // it's additionally clamped to the ACTUAL rendered chart rect it's
-    // already anchored to (same r/inset used for top/right above), so
-    // it can never exceed the chart's own width or height. This only
-    // ever shrinks the card relative to what the desktop/base CSS
-    // already allows — desktop (anything above the 640px breakpoint)
-    // is untouched, both here and in its own CSS rules.
     const lbnPanel=card.querySelector('.lbn-panel');
-    if(window.matchMedia('(max-width:640px)').matches){
+    // While the Analysis card is in its enlarged .lbn-zoomed overlay state
+    // it is deliberately centered/sized by CSS, independent of the chart
+    // rect — skip re-anchoring/clamping it here so a resize or chart
+    // change mid-zoom can't fight that CSS with a stale inline top/right/
+    // max-height value. The Analysis BUTTON still tracks the chart corner
+    // either way, since it never moves/resizes itself.
+    if(!card.classList.contains('lbn-zoomed')){
+      card.style.top=top+'px';card.style.right=right+'px';
+      // ── Chart-rect containment — the card (and its inner .lbn-panel)
+      // is clamped to the ACTUAL rendered chart image's own width/height,
+      // on every screen size (desktop included), so the Analysis overlay
+      // can never grow taller or wider than the chart itself. This only
+      // ever shrinks the card relative to what the base CSS alone would
+      // allow.
       const availW=Math.max(180,Math.round(r.width-inset*2));
       const availH=Math.max(180,Math.round(r.height-inset*2));
       card.style.maxWidth=availW+'px';
       card.style.maxHeight=availH+'px';
       if(lbnPanel)lbnPanel.style.maxHeight=availH+'px';
-    }else{
-      card.style.maxWidth='';card.style.maxHeight='';
-      if(lbnPanel)lbnPanel.style.maxHeight='';
     }
     if(glow){
       glow.style.top=Math.round(r.top)+'px';glow.style.left=Math.round(r.left)+'px';
@@ -4093,6 +4177,41 @@ function addCredential(){
     }
     return true;
   }
+  // Analysis Card's OWN zoom control — enlarges the card as a centered
+  // overlay for comfortable reading, fully independent of the chart's
+  // own zoom (.lb-tbtn/#lb-toolbar/lbZoomIn/lbZoomOut, never called
+  // here). Never resizes #lb, #lb-inner, or the chart image/canvas —
+  // only toggles #lb-notes-card's own .lbn-zoomed class. Collapsing
+  // hands sizing/position straight back to lbPositionUI()'s normal
+  // chart-rect-contained anchoring, so it returns to exactly where/how
+  // large it would be if it had never been zoomed.
+  window.toggleLBNotesZoom=function(){
+    if(!card)return;
+    const zoomBtn=document.getElementById('lb-notes-zoom');
+    const wasZoomed=card.classList.contains('lbn-zoomed');
+    card.classList.add('lbn-zoom-anim');
+    void card.offsetWidth; // commit the transition-enabling class before flipping state, so the size/position change actually animates
+    if(wasZoomed){
+      card.classList.remove('lbn-zoomed');
+      lbPositionUI(); // re-anchor + re-clamp back to the chart-rect-contained resting size/position
+    }else{
+      // clear any inline resting-state values so the .lbn-zoomed CSS
+      // (which centers the card) isn't fought by a leftover inline
+      // top/right/max-width/max-height from the last lbPositionUI() call
+      card.style.top='';card.style.right='';card.style.maxWidth='';card.style.maxHeight='';
+      const lbnPanel=card.querySelector('.lbn-panel');
+      if(lbnPanel)lbnPanel.style.maxHeight='';
+      card.classList.add('lbn-zoomed');
+    }
+    if(zoomBtn){
+      zoomBtn.innerHTML=wasZoomed?LBN_ZOOM_ICON_EXPAND:LBN_ZOOM_ICON_COLLAPSE;
+      zoomBtn.classList.toggle('lbn-zoom-active',!wasZoomed);
+      const lbl=wasZoomed?'Expand analysis':'Collapse analysis';
+      zoomBtn.title=lbl;zoomBtn.setAttribute('aria-label',lbl);
+    }
+    clearTimeout(lbnZoomAnimT);
+    lbnZoomAnimT=setTimeout(()=>{if(card)card.classList.remove('lbn-zoom-anim');},340);
+  };
   // ── FLIP-aware guard ──────────────────────────────────────────────
   // openLB's own flipIn animates #lb-img's CSS `transform` from the
   // clicked thumbnail's on-screen rect up to full size (never touched
